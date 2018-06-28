@@ -2,17 +2,33 @@
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
-typedef struct translation {
-	char* voc;
-	char* trans;
-} Translation;
+
+typedef struct vocNode {
+	char *foreignWord;
+	char *translation;
+	struct vocNode* next;
+	struct vocNode* prev;
+} Vocable;
 
 typedef struct translationReturn {
-	Translation* vocs;
+	Vocable* vocableList;
 	unsigned int size;
 } TransReturn;
 
-unsigned int numberOfLines(FILE* fd) {
+void clearList(Vocable* start) {
+	Vocable *node = start;
+	Vocable *nextNode = NULL;
+
+	while(node->next) {
+		nextNode = node->next;
+		free(node);
+		node = nextNode;
+	}
+
+	free(node);
+}
+
+unsigned int numberOfVocables(FILE* fd) {
 	unsigned int i = 0;
 	char dump[250];
 
@@ -34,30 +50,66 @@ void deleteNewLine(char* string) {
 
 TransReturn* readFile(char* fileName) {
 	FILE *fd = fopen(fileName, "r");
-	
+	unsigned int size = 0;
+	Vocable* headVocable = NULL;
+	Vocable* freshVocable = NULL; 
+	Vocable* prevVocable = NULL;
+
 	if(fd == NULL) {
 		return NULL;
 	}
 	
-	unsigned int size = numberOfLines(fd);
+	size = numberOfVocables(fd);
 
-	Translation* vocs = (Translation*) malloc(size*sizeof(Translation));
+	if(size < 2) {
+		return NULL;
+	}
+
+	headVocable = (Vocable*) malloc(sizeof(Vocable));
+
+	if (!headVocable) return NULL;
+
+	prevVocable = headVocable;
 
 	for(unsigned int i = 0; i < size; i++) {
-		vocs[i].voc = (char*) malloc(250*sizeof(char));
-		fgets(vocs[i].voc, 999, fd);
-		deleteNewLine(vocs[i].voc);
-		vocs[i].trans = (char*) malloc(250*sizeof(char));
-	   	fgets(vocs[i].trans, 999, fd);	
-		deleteNewLine(vocs[i].trans);
+		freshVocable = (Vocable*) malloc(sizeof(Vocable));
+
+		freshVocable->foreignWord = (char*) malloc(250*sizeof(char));
+		fgets(freshVocable->foreignWord, 999, fd);
+		deleteNewLine(freshVocable->foreignWord);
+		freshVocable->translation = (char*) malloc(250*sizeof(char));
+	   	fgets(freshVocable->translation, 999, fd);	
+		deleteNewLine(freshVocable->translation);
+
+		freshVocable->next = headVocable;
+		freshVocable->prev = prevVocable;
+		prevVocable->next = freshVocable;
+		prevVocable = freshVocable;
 	}
+
+	freshVocable->next = headVocable->next;
+	headVocable->next->prev = freshVocable;
 
 	TransReturn *tReturn = (TransReturn*) malloc(sizeof(TransReturn));
 
 	tReturn->size = size;
-	tReturn->vocs = vocs;
+	tReturn->vocableList = freshVocable;
 
 	return tReturn;
+}
+
+void printList(Vocable* list) {
+	Vocable* head = list;
+	Vocable* this = head;
+	
+	while(this->next != head) {
+		printf("%s\n",this->foreignWord);
+		printf("%s\n",this->translation);
+		this = this->next;
+	}
+
+	printf("%s\n",this->foreignWord);
+	printf("%s\n",this->translation);
 }
 
 void printCommendation() {
@@ -68,8 +120,44 @@ void printInsult(char* rightAnswer) {
 	printf("ITS %s YOU DUMB PIECE OF SHIT\n", rightAnswer);
 }
 
+Vocable* vocableByIndex(Vocable* list, unsigned int index) {
+	Vocable* voc = list;
+	
+	for(unsigned int i = 0; i < index; i++) {
+		voc = voc->next;
+	}
+
+	return voc;
+}
+
+Vocable* getHead(Vocable* list) {
+	Vocable* voc = list;
+	while(voc->prev) voc = voc->prev;
+	return voc;
+}
+
+Vocable* addToList(Vocable* list, Vocable* voc) {
+	if(!list) return voc;
+
+	list->next = voc;
+	voc->prev = list;
+
+	return voc;
+}
+
 int main(int argc, char **argv) {
 	TransReturn *tReturn;
+	Vocable* voclist = NULL;
+	Vocable* correct = NULL;
+	Vocable* current = NULL;
+	unsigned int amountOfVocs = 0;
+	unsigned int randomIndex = 0;
+	unsigned int vocsLeft = 0;
+	unsigned int falseAnswers = 0;
+	char* answer;
+	char* question;
+	time_t t;
+
 	if(argc < 2) {
 		tReturn = readFile("./japvoc.txt");
 	} else {
@@ -80,27 +168,58 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	Translation* vocs = tReturn->vocs;
-	unsigned int size = tReturn->size;
-	char* question; 
-	char* answer = (char*) malloc(250*sizeof(char));
-	unsigned int offset;
-	time_t t;
+	voclist = tReturn->vocableList;
+	
+	amountOfVocs = tReturn->size;
+	vocsLeft = amountOfVocs;
+	answer = (char*) malloc(250*sizeof(char));
 	srand((unsigned) time(&t));
 
 	while(1) {
-		offset = rand() % size;
-		question = vocs[offset].voc;
-
+		randomIndex = rand() % vocsLeft;
+		current = vocableByIndex(voclist,randomIndex);
+		question = current->foreignWord;
 		printf("%s\n", question);
 
 		fgets(answer, 250, stdin);
 		deleteNewLine(answer);
 
-		if(strcmp(answer, vocs[offset].trans) != 0) {
-			printInsult(vocs[offset].trans);
+		if(strcmp(answer, current->translation) != 0) {
+			falseAnswers++;
+			printInsult(current->translation);
 		} else {
+			voclist = current->next;
+			current->prev->next = current->next;
+			current->next->prev = current->prev;
+
+			current->prev = NULL;
+			current->next = NULL;
+
+			correct = addToList(correct, current);
+			vocsLeft--;
+
 			printCommendation();
+		}
+
+		if(vocsLeft < 1) {
+			printf("Round ended. You tested %i vocables and gave %i wrong answers\n", amountOfVocs, falseAnswers);
+			Vocable* newHead = getHead(correct);
+			newHead->prev = correct;
+			correct->next = newHead;
+
+			puts("Start another Round? [Y/n]");
+			fgets(answer, 250, stdin);
+
+			deleteNewLine(answer);
+
+			if(strcmp(answer, "") != 0 && strcmp(answer, "Y") != 0 && strcmp(answer, "y") != 0) {
+				return 0;
+			} else {
+				vocsLeft = amountOfVocs;
+				falseAnswers = 0;
+				voclist = correct;
+				correct = NULL;
+			}
 		}
 	}
 }
