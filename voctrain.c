@@ -3,18 +3,50 @@
 #include <string.h>
 #include <stdlib.h>
 
-typedef struct vocNode {
-	char *foreignWord;
+#define MAX_WORD_LENGTH 250
+
+typedef struct vocable {
+	char *original;
 	char *translation;
-	struct vocNode* next;
-	struct vocNode* prev;
+	struct vocable* next;
+	struct vocable* prev;
 } Vocable;
 
-typedef struct translationReturn {
-	Vocable* vocableList;
+typedef struct vocableList {
+	Vocable* head;
+	Vocable* tail;
 	unsigned int size;
-} TransReturn;
+} VocableList;
 
+Vocable* createVocable(char* original, char* translation) {
+	printf("creating vocable %s -> %s\n",original,translation);
+	Vocable *voc = (Vocable*) malloc(sizeof(Vocable));
+	if(!voc) return NULL;
+
+	voc->original = (char*) malloc(strlen(original) * sizeof(char));
+	if(!voc->original) return NULL;
+
+	voc->translation = (char*) malloc(strlen(translation) * sizeof(char));
+	if(!voc->translation) return NULL;
+
+	strcpy(voc->original,original);
+	strcpy(voc->translation,translation);
+	voc->next = NULL;
+	voc->prev = NULL;
+
+	printf("returning voc\n");
+	return voc;
+}
+
+void printList(VocableList* list) {
+	printf("printing %p\n",list);
+	Vocable *voc = list->head;
+		
+	for(unsigned int i = 0; i < list->size; i++) {
+		printf("%s -> %s\n",voc->original,voc->translation);
+		voc = voc->next;
+	}
+}
 void clearList(Vocable* start) {
 	Vocable *node = start;
 	Vocable *nextNode = NULL;
@@ -28,7 +60,7 @@ void clearList(Vocable* start) {
 	free(node);
 }
 
-unsigned int numberOfVocables(FILE* fd) {
+unsigned int numberOfLines(FILE* fd) {
 	unsigned int i = 0;
 	char dump[250];
 
@@ -38,7 +70,7 @@ unsigned int numberOfVocables(FILE* fd) {
 
 	rewind(fd);
 
-	return i / 2; 
+	return i; 
 }
 
 void deleteNewLine(char* string) {
@@ -48,69 +80,143 @@ void deleteNewLine(char* string) {
 	}
 }
 
-TransReturn* readFile(char* fileName) {
-	FILE *fd = fopen(fileName, "r");
-	unsigned int size = 0;
-	Vocable* headVocable = NULL;
-	Vocable* freshVocable = NULL; 
-	Vocable* prevVocable = NULL;
-
-	if(fd == NULL) {
-		return NULL;
+void removeFromList(VocableList* list, Vocable *voc) {
+	if(list->size > 1) {
+		voc->prev->next = voc->next;
+		voc->next->prev = voc->prev;
+	
+		if(voc == list->head) {
+			list->head = voc->next;
+		}
+	} else {
+		list->head = NULL;
+		list->tail = NULL;
 	}
 	
-	size = numberOfVocables(fd);
+	voc->next = NULL;
+	voc->prev = NULL;
 
-	if(size < 2) {
-		return NULL;
-	}
-
-	headVocable = (Vocable*) malloc(sizeof(Vocable));
-
-	if (!headVocable) return NULL;
-
-	prevVocable = headVocable;
-
-	for(unsigned int i = 0; i < size; i++) {
-		freshVocable = (Vocable*) malloc(sizeof(Vocable));
-
-		freshVocable->foreignWord = (char*) malloc(250*sizeof(char));
-		fgets(freshVocable->foreignWord, 999, fd);
-		deleteNewLine(freshVocable->foreignWord);
-		freshVocable->translation = (char*) malloc(250*sizeof(char));
-	   	fgets(freshVocable->translation, 999, fd);	
-		deleteNewLine(freshVocable->translation);
-
-		freshVocable->next = headVocable;
-		freshVocable->prev = prevVocable;
-		prevVocable->next = freshVocable;
-		prevVocable = freshVocable;
-	}
-
-	freshVocable->next = headVocable->next;
-	headVocable->next->prev = freshVocable;
-
-	TransReturn *tReturn = (TransReturn*) malloc(sizeof(TransReturn));
-
-	tReturn->size = size;
-	tReturn->vocableList = freshVocable;
-
-	return tReturn;
+	--list;
 }
 
-void printList(Vocable* list) {
+void addVocToList(VocableList* list, Vocable* voc) {
+	printf("adding %s to list %p\n",voc->original,list);
+	if(!list->head) {
+		printf("head was NULL\n");
+		list->head = voc;
+		list->tail = voc;
+	} else {
+		list->tail->next = voc;
+		voc->prev = list->tail;
+		voc->next = NULL;
+		list->tail = voc;	
+	}
+
+	list->size++;
+}
+
+VocableList readAsList(char* filename) {
+	printf("read file %s\n",filename);
+	FILE *fd;
+	unsigned int nol;
+	unsigned int nov;
+	char translation[MAX_WORD_LENGTH];
+	char original[MAX_WORD_LENGTH];
+	VocableList list;
+	Vocable *vocable;
+	
+	list.size = 0;
+	list.head = NULL;
+	list.tail = NULL;
+
+	fd = fopen(filename, "r");
+	if(!fd) return list;
+
+	nol = numberOfLines(fd);
+	printf("found %i lines\n",nol);
+
+	if(nol < 2 || nol % 2 != 0) {
+		fclose(fd);
+		return list;
+	}	
+
+	nov = nol / 2;
+
+	for(unsigned int i = 0; i < nov; i++) {
+		fgets(original, MAX_WORD_LENGTH, fd);
+		fgets(translation, MAX_WORD_LENGTH, fd);
+		deleteNewLine(original);
+		deleteNewLine(translation);	
+		vocable = createVocable(original, translation);
+
+		if(!vocable) {
+			list.size = 0;
+			fclose(fd);
+			return list;
+		}
+
+		addVocToList(&list, vocable);
+	}
+
+	printList(&list);	
+	fclose(fd);
+	printf("returning from reading %s\n",filename);
+	return list;
+}
+
+void makeCircularList(VocableList* list) {
+	list->tail->next = list->head;
+	list->head->prev = list->tail;
+}
+
+void catenateLists(VocableList* list, VocableList* listToCat) {
+	if(!list->head) {
+		list = listToCat;
+	} else {
+		list->tail->next = listToCat->head;
+		listToCat->head->prev = list->tail;
+	}
+
+	printList(list);
+} 
+
+VocableList readVocableFiles(unsigned int argc, char **argv) {
+	VocableList list;
+	VocableList current;
+
+	list.head = NULL;
+	list.tail = NULL;
+	list.size = 0;
+
+	for(unsigned int i = 0; i < argc; i++) {
+		current = readAsList(*argv);
+		
+		if(current.size > 0) {
+			catenateLists(&list, &current);
+		} 
+
+		argv++;
+	}
+	printList(&list);
+
+	makeCircularList(&list);
+	return list;
+}
+
+void printCircularList(Vocable* list) {
 	Vocable* head = list;
 	Vocable* this = head;
 	
 	while(this->next != head) {
-		printf("%s\n",this->foreignWord);
+		printf("%s\n",this->original);
 		printf("%s\n",this->translation);
 		this = this->next;
 	}
 
-	printf("%s\n",this->foreignWord);
+	printf("%s\n",this->original);
 	printf("%s\n",this->translation);
 }
+
 
 void printCommendation() {
 	printf("Beebo Beebo\n");
@@ -136,49 +242,40 @@ Vocable* getHead(Vocable* list) {
 	return voc;
 }
 
-Vocable* addToList(Vocable* list, Vocable* voc) {
-	if(!list) return voc;
 
-	list->next = voc;
-	voc->prev = list;
-
-	return voc;
-}
 
 int main(int argc, char **argv) {
-	TransReturn *tReturn;
-	Vocable* voclist = NULL;
-	Vocable* correct = NULL;
+	VocableList vocableList;
+	VocableList correctList;
 	Vocable* current = NULL;
 	unsigned int amountOfVocs = 0;
 	unsigned int randomIndex = 0;
-	unsigned int vocsLeft = 0;
 	unsigned int falseAnswers = 0;
 	char* answer;
 	char* question;
 	time_t t;
 
 	if(argc < 2) {
-		tReturn = readFile("./japvoc.txt");
+			puts("No files to read");
+			exit(1);
 	} else {
-		tReturn = readFile(*(++argv));
+		vocableList = readVocableFiles(argc - 1, ++argv);
 	}	
 
-	if(tReturn == NULL) {
+	if(vocableList.size == 0) {
+		puts("One or more vocable files could not be read");
 		exit(1);
 	}
 
-	voclist = tReturn->vocableList;
+	printCircularList(vocableList.head);
 	
-	amountOfVocs = tReturn->size;
-	vocsLeft = amountOfVocs;
 	answer = (char*) malloc(250*sizeof(char));
 	srand((unsigned) time(&t));
 
 	while(1) {
-		randomIndex = rand() % vocsLeft;
-		current = vocableByIndex(voclist,randomIndex);
-		question = current->foreignWord;
+		randomIndex = rand() % vocableList.size;
+		current = vocableByIndex(vocableList.head,randomIndex);
+		question = current->original;
 		printf("%s\n", question);
 
 		fgets(answer, 250, stdin);
@@ -188,24 +285,13 @@ int main(int argc, char **argv) {
 			falseAnswers++;
 			printInsult(current->translation);
 		} else {
-			voclist = current->next;
-			current->prev->next = current->next;
-			current->next->prev = current->prev;
-
-			current->prev = NULL;
-			current->next = NULL;
-
-			correct = addToList(correct, current);
-			vocsLeft--;
-
+			removeFromList(&vocableList, current);
+			addVocToList(&correctList, current);
 			printCommendation();
 		}
 
-		if(vocsLeft < 1) {
+		if(vocableList.size < 1) {
 			printf("Round ended. You tested %i vocables and gave %i wrong answers\n", amountOfVocs, falseAnswers);
-			Vocable* newHead = getHead(correct);
-			newHead->prev = correct;
-			correct->next = newHead;
 
 			puts("Start another Round? [Y/n]");
 			fgets(answer, 250, stdin);
@@ -215,10 +301,15 @@ int main(int argc, char **argv) {
 			if(strcmp(answer, "") != 0 && strcmp(answer, "Y") != 0 && strcmp(answer, "y") != 0) {
 				return 0;
 			} else {
-				vocsLeft = amountOfVocs;
 				falseAnswers = 0;
-				voclist = correct;
-				correct = NULL;
+				
+				vocableList.head = correctList.head;
+				vocableList.tail = correctList.tail;
+				vocableList.size = correctList.size;
+				correctList.head = NULL;
+				correctList.tail = NULL;
+				correctList.size = 0;
+				makeCircularList(&vocableList);
 			}
 		}
 	}
