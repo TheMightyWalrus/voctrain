@@ -81,7 +81,9 @@ void deleteNewLine(char* string) {
 }
 
 void removeFromList(VocableList* list, Vocable *voc) {
+	printf("removing %s from list %p\n",voc->original,list);
 	if(list->size > 1) {
+		printf("size greater 1\n");
 		voc->prev->next = voc->next;
 		voc->next->prev = voc->prev;
 	
@@ -97,6 +99,7 @@ void removeFromList(VocableList* list, Vocable *voc) {
 	voc->prev = NULL;
 
 	--list;
+	printf("returning from removing\n");
 }
 
 void addVocToList(VocableList* list, Vocable* voc) {
@@ -106,6 +109,7 @@ void addVocToList(VocableList* list, Vocable* voc) {
 		list->head = voc;
 		list->tail = voc;
 	} else {
+		printf("head was not NULL\n");
 		list->tail->next = voc;
 		voc->prev = list->tail;
 		voc->next = NULL;
@@ -171,13 +175,14 @@ void makeCircularList(VocableList* list) {
 
 void catenateLists(VocableList* list, VocableList* listToCat) {
 	if(!list->head) {
-		list = listToCat;
+		list->head = listToCat->head;
+		list->tail = listToCat->tail;
+		list->size = listToCat->size;
 	} else {
 		list->tail->next = listToCat->head;
 		listToCat->head->prev = list->tail;
+		list->size += listToCat->size;
 	}
-
-	printList(list);
 } 
 
 VocableList readVocableFiles(unsigned int argc, char **argv) {
@@ -198,8 +203,6 @@ VocableList readVocableFiles(unsigned int argc, char **argv) {
 		argv++;
 	}
 	printList(&list);
-
-	makeCircularList(&list);
 	return list;
 }
 
@@ -236,14 +239,6 @@ Vocable* vocableByIndex(Vocable* list, unsigned int index) {
 	return voc;
 }
 
-Vocable* getHead(Vocable* list) {
-	Vocable* voc = list;
-	while(voc->prev) voc = voc->prev;
-	return voc;
-}
-
-
-
 int main(int argc, char **argv) {
 	VocableList vocableList;
 	VocableList correctList;
@@ -267,12 +262,18 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
+	correctList.head = NULL;
+	correctList.tail = NULL;
+	correctList.size = 0;
+
+	makeCircularList(&vocableList);
 	printCircularList(vocableList.head);
 	
 	answer = (char*) malloc(250*sizeof(char));
 	srand((unsigned) time(&t));
 
 	while(1) {
+		printf("vocablehead: %s\n",vocableList.head->original);
 		randomIndex = rand() % vocableList.size;
 		current = vocableByIndex(vocableList.head,randomIndex);
 		question = current->original;
