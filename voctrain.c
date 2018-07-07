@@ -19,7 +19,6 @@ typedef struct vocableList {
 } VocableList;
 
 Vocable* createVocable(char* original, char* translation) {
-	printf("creating vocable %s -> %s\n",original,translation);
 	Vocable *voc = (Vocable*) malloc(sizeof(Vocable));
 	if(!voc) return NULL;
 
@@ -34,12 +33,10 @@ Vocable* createVocable(char* original, char* translation) {
 	voc->next = NULL;
 	voc->prev = NULL;
 
-	printf("returning voc\n");
 	return voc;
 }
 
 void printList(VocableList* list) {
-	printf("printing %p\n",list);
 	Vocable *voc = list->head;
 		
 	for(unsigned int i = 0; i < list->size; i++) {
@@ -81,9 +78,7 @@ void deleteNewLine(char* string) {
 }
 
 void removeFromList(VocableList* list, Vocable *voc) {
-	printf("removing %s from list %p\n",voc->original,list);
 	if(list->size > 1) {
-		printf("size greater 1\n");
 		voc->prev->next = voc->next;
 		voc->next->prev = voc->prev;
 	
@@ -98,18 +93,14 @@ void removeFromList(VocableList* list, Vocable *voc) {
 	voc->next = NULL;
 	voc->prev = NULL;
 
-	--list;
-	printf("returning from removing\n");
+	list->size--;
 }
 
 void addVocToList(VocableList* list, Vocable* voc) {
-	printf("adding %s to list %p\n",voc->original,list);
 	if(!list->head) {
-		printf("head was NULL\n");
 		list->head = voc;
 		list->tail = voc;
 	} else {
-		printf("head was not NULL\n");
 		list->tail->next = voc;
 		voc->prev = list->tail;
 		voc->next = NULL;
@@ -120,7 +111,6 @@ void addVocToList(VocableList* list, Vocable* voc) {
 }
 
 VocableList readAsList(char* filename) {
-	printf("read file %s\n",filename);
 	FILE *fd;
 	unsigned int nol;
 	unsigned int nov;
@@ -137,7 +127,6 @@ VocableList readAsList(char* filename) {
 	if(!fd) return list;
 
 	nol = numberOfLines(fd);
-	printf("found %i lines\n",nol);
 
 	if(nol < 2 || nol % 2 != 0) {
 		fclose(fd);
@@ -162,9 +151,7 @@ VocableList readAsList(char* filename) {
 		addVocToList(&list, vocable);
 	}
 
-	printList(&list);	
 	fclose(fd);
-	printf("returning from reading %s\n",filename);
 	return list;
 }
 
@@ -182,6 +169,7 @@ void catenateLists(VocableList* list, VocableList* listToCat) {
 		list->tail->next = listToCat->head;
 		listToCat->head->prev = list->tail;
 		list->size += listToCat->size;
+		list->tail = listToCat->tail;
 	}
 } 
 
@@ -202,24 +190,8 @@ VocableList readVocableFiles(unsigned int argc, char **argv) {
 
 		argv++;
 	}
-	printList(&list);
 	return list;
 }
-
-void printCircularList(Vocable* list) {
-	Vocable* head = list;
-	Vocable* this = head;
-	
-	while(this->next != head) {
-		printf("%s\n",this->original);
-		printf("%s\n",this->translation);
-		this = this->next;
-	}
-
-	printf("%s\n",this->original);
-	printf("%s\n",this->translation);
-}
-
 
 void printCommendation() {
 	printf("Beebo Beebo\n");
@@ -229,8 +201,8 @@ void printInsult(char* rightAnswer) {
 	printf("ITS %s YOU DUMB PIECE OF SHIT\n", rightAnswer);
 }
 
-Vocable* vocableByIndex(Vocable* list, unsigned int index) {
-	Vocable* voc = list;
+Vocable* vocableByIndex(Vocable* start, unsigned int index) {
+	Vocable* voc = start;
 	
 	for(unsigned int i = 0; i < index; i++) {
 		voc = voc->next;
@@ -243,7 +215,6 @@ int main(int argc, char **argv) {
 	VocableList vocableList;
 	VocableList correctList;
 	Vocable* current = NULL;
-	unsigned int amountOfVocs = 0;
 	unsigned int randomIndex = 0;
 	unsigned int falseAnswers = 0;
 	char* answer;
@@ -267,13 +238,10 @@ int main(int argc, char **argv) {
 	correctList.size = 0;
 
 	makeCircularList(&vocableList);
-	printCircularList(vocableList.head);
-	
 	answer = (char*) malloc(250*sizeof(char));
 	srand((unsigned) time(&t));
 
 	while(1) {
-		printf("vocablehead: %s\n",vocableList.head->original);
 		randomIndex = rand() % vocableList.size;
 		current = vocableByIndex(vocableList.head,randomIndex);
 		question = current->original;
@@ -292,7 +260,7 @@ int main(int argc, char **argv) {
 		}
 
 		if(vocableList.size < 1) {
-			printf("Round ended. You tested %i vocables and gave %i wrong answers\n", amountOfVocs, falseAnswers);
+			printf("Round ended. You tested %i vocables and gave %i wrong answers\n", correctList.size, falseAnswers);
 
 			puts("Start another Round? [Y/n]");
 			fgets(answer, 250, stdin);
