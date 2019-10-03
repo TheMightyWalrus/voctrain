@@ -8,4 +8,6 @@ You can provide a list of words and their translation in a UTF-8 encoded text fi
 <translation>
 <foreign word>
 <translation>
+
+
 ...
